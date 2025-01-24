@@ -43,9 +43,19 @@ app.use('/api/adjustments', require('./routes/adjustments'));
 
 // Puerto del servidor
 const PORT = process.env.PORT || 3004;
+const DEPLOYED_URL = process.env.DEPLOYED_URL || `http://localhost:${PORT}`;
+
+// Ruta para verificar si el servidor está corriendo
+app.get("/", (req, res) => {
+  res.json({
+    status: "success",
+    message: "Backend is running successfully!",
+    timestamp: new Date().toISOString(),
+  });
+});
 
 app.listen(PORT, () => {
-  console.log(`Servidor corriendo en http://localhost:${PORT}`);
+  console.log(`Servidor corriendo en: ${DEPLOYED_URL}`);
 
   // Listar todas las rutas expuestas
   const endpoints = listEndpoints(app);
