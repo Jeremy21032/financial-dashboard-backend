@@ -108,7 +108,7 @@ router.delete('/:id', (req, res) => {
 // 📌 Obtener la vista de gastos divididos por estudiantes
 router.get('/expenses-per-student', (req, res) => {
   db.query(
-    `SELECT * FROM student_expense_view ORDER BY student_name ASC`,
+    `SELECT * FROM student_expenses_share ORDER BY student_name ASC`,
     (err, results) => {
       if (err) {
         console.error("Error al obtener los gastos por estudiante:", err);
