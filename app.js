@@ -1,9 +1,9 @@
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
-const mysql = require('mysql2');
-const listEndpoints = require('express-list-endpoints'); // Librería para listar endpoints
+const listEndpoints = require('express-list-endpoints'); // Para listar endpoints
 const cors = require("cors");
+const db = require('./db'); // 🔹 Importar el pool de conexiones
 
 const app = express();
 
@@ -11,30 +11,19 @@ const app = express();
 app.use(cors());
 
 // 🔹 Aumentar el límite del tamaño de las solicitudes
-app.use(express.json({ limit: '500mb' })); // Para JSON
-app.use(express.urlencoded({ limit: '500mb', extended: true })); // Para datos de formularios
+app.use(express.json({ limit: '500mb' }));
+app.use(express.urlencoded({ limit: '500mb', extended: true }));
 
 // Si usas body-parser explícitamente
 app.use(bodyParser.json({ limit: '500mb' }));
 app.use(bodyParser.urlencoded({ limit: '500mb', extended: true }));
 
-// Conexión a MySQL
-const db = mysql.createConnection({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-});
+// 🔹 Verificar conexión a MySQL al iniciar el servidor
+db.getConnection()
+  .then(() => console.log('✅ Conectado a MySQL con Pool de Conexiones'))
+  .catch(err => console.error('❌ Error conectando a MySQL:', err.message));
 
-db.connect((err) => {
-  if (err) {
-    console.error('Error conectando a MySQL:', err.message);
-  } else {
-    console.log('Conectado a MySQL');
-  }
-});
-
-// 🔹 Asegúrate de definir los middlewares ANTES de las rutas
+// Definir rutas
 app.use('/api/students', require('./routes/students'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/config', require('./routes/config'));
@@ -45,7 +34,7 @@ app.use('/api/adjustments', require('./routes/adjustments'));
 const PORT = process.env.PORT || 3004;
 const DEPLOYED_URL = process.env.DEPLOYED_URL || `http://localhost:${PORT}`;
 
-// Ruta para verificar si el servidor está corriendo
+// Ruta de verificación del servidor
 app.get("/", (req, res) => {
   res.json({
     status: "success",
@@ -54,12 +43,13 @@ app.get("/", (req, res) => {
   });
 });
 
+// Iniciar servidor
 app.listen(PORT, () => {
-  console.log(`Servidor corriendo en: ${DEPLOYED_URL}`);
+  console.log(`🚀 Servidor corriendo en: ${DEPLOYED_URL}`);
 
   // Listar todas las rutas expuestas
   const endpoints = listEndpoints(app);
-  console.log('Rutas disponibles:');
+  console.log('📌 Rutas disponibles:');
   endpoints.forEach((endpoint) => {
     console.log(`- ${endpoint.methods.join(', ')} ${endpoint.path}`);
   });
