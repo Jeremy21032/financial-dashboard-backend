@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const mysql = require('mysql2');
-const listEndpoints = require('express-list-endpoints'); // Librería para listar endpoints
+const listEndpoints = require('express-list-endpoints'); // Para listar endpoints
 const cors = require("cors");
 
 const app = express();
@@ -18,23 +18,63 @@ app.use(express.urlencoded({ limit: '500mb', extended: true })); // Para datos d
 app.use(bodyParser.json({ limit: '500mb' }));
 app.use(bodyParser.urlencoded({ limit: '500mb', extended: true }));
 
-// Conexión a MySQL
-const db = mysql.createConnection({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-});
+// 🔹 Función para conectar y mantener MySQL activo
+let db;
 
-db.connect((err) => {
-  if (err) {
-    console.error('Error conectando a MySQL:', err.message);
-  } else {
-    console.log('Conectado a MySQL');
+const connectToDatabase = () => {
+  db = mysql.createConnection({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    multipleStatements: true // Para ejecutar múltiples queries en una sola solicitud si es necesario
+  });
+
+  db.connect((err) => {
+    if (err) {
+      console.error('❌ Error conectando a MySQL:', err.message);
+      setTimeout(connectToDatabase, 5000); // Reintento de conexión tras 5 segundos
+    } else {
+      console.log('✅ Conectado a MySQL');
+    }
+  });
+
+  // Manejo de errores y reconexión
+  db.on('error', (err) => {
+    console.error('🔥 Error en la conexión de MySQL:', err.message);
+    if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
+      console.log('🔄 Reintentando conexión...');
+      connectToDatabase();
+    } else {
+      throw err;
+    }
+  });
+
+  // 🔹 Mantener la conexión activa enviando un "ping" cada 5 minutos
+  setInterval(() => {
+    db.ping((err) => {
+      if (err) {
+        console.error('⚠️ Error en el ping de MySQL:', err.message);
+      } else {
+        console.log('✅ Ping enviado a MySQL para mantener la conexión activa.');
+      }
+    });
+  }, 150000); // 5 minutos
+};
+
+// Inicializar conexión a la base de datos
+connectToDatabase();
+
+// Middleware para asegurarse de que la conexión a MySQL se mantenga
+app.use((req, res, next) => {
+  if (!db) {
+    connectToDatabase();
   }
+  req.db = db; // Se pasa la conexión en `req.db`
+  next();
 });
 
-// 🔹 Asegúrate de definir los middlewares ANTES de las rutas
+// 🔹 Definir rutas API
 app.use('/api/students', require('./routes/students'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/config', require('./routes/config'));
@@ -54,12 +94,13 @@ app.get("/", (req, res) => {
   });
 });
 
+// Iniciar servidor
 app.listen(PORT, () => {
-  console.log(`Servidor corriendo en: ${DEPLOYED_URL}`);
+  console.log(`🚀 Servidor corriendo en: ${DEPLOYED_URL}`);
 
   // Listar todas las rutas expuestas
   const endpoints = listEndpoints(app);
-  console.log('Rutas disponibles:');
+  console.log('📌 Rutas disponibles:');
   endpoints.forEach((endpoint) => {
     console.log(`- ${endpoint.methods.join(', ')} ${endpoint.path}`);
   });
