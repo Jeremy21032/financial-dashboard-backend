@@ -65,7 +65,7 @@ router.get("/categories", (req, res) => {
 
 // 🔹 Agregar una nueva categoría de gasto
 router.post("/categories", (req, res) => {
-  const { name, description, observation } = req.body;
+  const { name, description, observation , base_amount} = req.body;
 
   if (!name) {
     return res
@@ -74,8 +74,8 @@ router.post("/categories", (req, res) => {
   }
 
   db.query(
-    "INSERT INTO expense_categories (name, description, observation) VALUES (?, ?, ?)",
-    [name, description, observation],
+    "INSERT INTO expense_categories (name, description, observation, base_amount) VALUES (?, ?, ?, ?)",
+    [name, description, observation, base_amount],
     (err, result) => {
       if (err) {
         console.error("Error al agregar la categoría:", err);
@@ -83,7 +83,7 @@ router.post("/categories", (req, res) => {
           .status(500)
           .json({ message: "Error al agregar la categoría", error: err });
       }
-      res.json({ id: result.insertId, name, description, observation });
+      res.json({ id: result.insertId, name, description, observation, base_amount });
     }
   );
 });
