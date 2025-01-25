@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 
-// 📌 Registrar un nuevo gasto (soporte para múltiples imágenes)
 router.post('/', (req, res) => {
   const { category_id, amount, date, description, observacion, image_url } = req.body;
   
@@ -11,6 +10,7 @@ router.post('/', (req, res) => {
   db.query(
     'INSERT INTO expenses (category_id, amount, date, description, observacion, image_url) VALUES (?, ?, ?, ?, ?, ?)',
     [category_id, amount, date, description, observacion, imagesJson],
+    [category_id, amount, date, description, observacion, JSON.stringify(image_url)],
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ 
@@ -26,7 +26,6 @@ router.post('/', (req, res) => {
   );
 });
 
-// 📌 Obtener todos los gastos con imágenes correctamente formateadas
 router.get('/', (req, res) => {
   db.query(
     `SELECT 
@@ -65,7 +64,7 @@ router.put('/:id', (req, res) => {
     `UPDATE expenses 
      SET category_id = ?, amount = ?, date = ?, description = ?, observacion = ?, image_url = ?
      WHERE id = ?`,
-    [category_id, amount, date, description, observacion, imagesJson, id],
+    [category_id, amount, date, description, observacion, JSON.stringify(image_url), id],
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message });
       if (result.affectedRows === 0) {
@@ -93,4 +92,7 @@ router.delete('/:id', (req, res) => {
   );
 });
 
+<<<<<<< HEAD
 module.exports = router;
+=======
+>>>>>>> parent of eb1a965 (Modificando expenses)
