@@ -2,13 +2,15 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 
-// 📌 Registrar un nuevo gasto (con múltiples imágenes en image_url)
+// 📌 Registrar un nuevo gasto (soporte para múltiples imágenes)
 router.post('/', (req, res) => {
   const { category_id, amount, date, description, observacion, image_url } = req.body;
   
+  const imagesJson = JSON.stringify(image_url || []); // Convertir array a JSON
+
   db.query(
     'INSERT INTO expenses (category_id, amount, date, description, observacion, image_url) VALUES (?, ?, ?, ?, ?, ?)',
-    [category_id, amount, date, description, observacion, JSON.stringify(image_url)],
+    [category_id, amount, date, description, observacion, imagesJson],
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ 
@@ -24,7 +26,7 @@ router.post('/', (req, res) => {
   );
 });
 
-// 📌 Obtener todos los gastos con información de la categoría
+// 📌 Obtener todos los gastos con imágenes correctamente formateadas
 router.get('/', (req, res) => {
   db.query(
     `SELECT 
@@ -34,14 +36,14 @@ router.get('/', (req, res) => {
       e.description, 
       e.observacion, 
       e.image_url, 
-      c.name AS category 
+      c.name AS category_name
     FROM expenses e 
     LEFT JOIN expense_categories c ON e.category_id = c.id
     ORDER BY e.date DESC`,
     (err, results) => {
       if (err) return res.status(500).json({ error: err.message });
 
-      // Convertir imágenes de JSON a Array
+      // Convertir imágenes de JSON a Array antes de enviarlas
       const formattedResults = results.map(expense => ({
         ...expense,
         image_url: expense.image_url ? JSON.parse(expense.image_url) : []
@@ -52,32 +54,18 @@ router.get('/', (req, res) => {
   );
 });
 
-// 📌 Obtener gastos agrupados por categoría
-router.get('/grouped', (req, res) => {
-  db.query(
-    `SELECT 
-      c.name AS category, 
-      SUM(e.amount) AS total 
-    FROM expenses e 
-    LEFT JOIN expense_categories c ON e.category_id = c.id
-    GROUP BY c.name`,
-    (err, results) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json(results);
-    }
-  );
-});
-
 // 📌 Actualizar un gasto (incluyendo imágenes)
 router.put('/:id', (req, res) => {
   const { id } = req.params;
   const { category_id, amount, date, description, observacion, image_url } = req.body;
 
+  const imagesJson = JSON.stringify(image_url || []);
+
   db.query(
     `UPDATE expenses 
      SET category_id = ?, amount = ?, date = ?, description = ?, observacion = ?, image_url = ?
      WHERE id = ?`,
-    [category_id, amount, date, description, observacion, JSON.stringify(image_url), id],
+    [category_id, amount, date, description, observacion, imagesJson, id],
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message });
       if (result.affectedRows === 0) {
@@ -101,20 +89,6 @@ router.delete('/:id', (req, res) => {
         return res.status(404).json({ message: "Gasto no encontrado" });
       }
       res.json({ message: "Gasto eliminado con éxito" });
-    }
-  );
-});
-
-// 📌 Obtener la vista de gastos divididos por estudiantes
-router.get('/expenses-per-student', (req, res) => {
-  db.query(
-    `SELECT * FROM student_expense_view ORDER BY student_name ASC`,
-    (err, results) => {
-      if (err) {
-        console.error("Error al obtener los gastos por estudiante:", err);
-        return res.status(500).json({ message: "Error al obtener los datos", error: err });
-      }
-      res.json(results);
     }
   );
 });
