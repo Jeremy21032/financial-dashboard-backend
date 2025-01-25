@@ -10,6 +10,23 @@ const app = express();
 // 🔹 Habilitar CORS
 app.use(cors());
 
+const allowedOrigins = [
+  "http://localhost:3000", // Permite el entorno de desarrollo
+  "https://financial-dashboard-frontend.vercel.app", // Dominio principal
+  /\.financial-dashboard-frontend\.vercel\.app$/ // Permite cualquier subdominio
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.some(allowed => typeof allowed === "string" ? allowed === origin : allowed.test(origin))) {
+      callback(null, true);
+    } else {
+      callback(new Error("CORS bloqueado"));
+    }
+  },
+  methods: "GET,POST,PUT,DELETE",
+  allowedHeaders: "Content-Type,Authorization"
+}));
 // 🔹 Aumentar el límite del tamaño de las solicitudes
 app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ limit: '500mb', extended: true }));
