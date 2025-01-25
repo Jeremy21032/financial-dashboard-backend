@@ -6,7 +6,7 @@ const db = require('../db');
 router.post('/', (req, res) => {
   const { category_id, amount, date, description, observacion, image_url } = req.body;
   
-  const imagesJson = JSON.stringify(image_url || []); // Convertir array a JSON
+  const imagesJson = JSON.stringify(image_url || []); // Convertir array de imágenes a JSON
 
   db.query(
     'INSERT INTO expenses (category_id, amount, date, description, observacion, image_url) VALUES (?, ?, ?, ?, ?, ?)',
@@ -52,6 +52,22 @@ router.get('/', (req, res) => {
       res.json(formattedResults);
     }
   );
+});
+
+// 📌 Obtener la vista `student_expenses_share`
+router.get('/expenses-per-student', (req, res) => {
+  const query = `
+    SELECT * FROM student_expenses_share
+    ORDER BY student_name ASC;
+  `;
+
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error("Error al obtener los gastos por estudiante:", err);
+      return res.status(500).json({ message: "Error al obtener los datos", error: err });
+    }
+    res.json(results);
+  });
 });
 
 // 📌 Actualizar un gasto (incluyendo imágenes)
