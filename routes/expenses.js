@@ -92,7 +92,4 @@ router.delete('/:id', (req, res) => {
   );
 });
 
-<<<<<<< HEAD
 module.exports = router;
-=======
->>>>>>> parent of eb1a965 (Modificando expenses)
