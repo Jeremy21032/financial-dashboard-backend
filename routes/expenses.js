@@ -4,11 +4,15 @@ const db = require('../db');
 
 // 📌 Registrar un nuevo gasto (con múltiples imágenes en image_url)
 router.post('/', (req, res) => {
-  const { category_id, amount, date, description, observacion, image_url } = req.body;
+  const { category_id, amount, date, description, observacion, image_url, course_id } = req.body;
+  
+  if (!course_id) {
+    return res.status(400).json({ error: 'course_id es requerido' });
+  }
   
   db.query(
-    'INSERT INTO expenses (category_id, amount, date, description, observacion, image_url) VALUES (?, ?, ?, ?, ?, ?)',
-    [category_id, amount, date, description, observacion, JSON.stringify(image_url)],
+    'INSERT INTO expenses (category_id, amount, date, description, observacion, image_url, course_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [category_id, amount, date, description, observacion, JSON.stringify(image_url), course_id],
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ 
@@ -18,14 +22,21 @@ router.post('/', (req, res) => {
         date, 
         description, 
         observacion, 
-        image_url
+        image_url,
+        course_id
       });
     }
   );
 });
 
-// 📌 Obtener todos los gastos con información de la categoría
+// 📌 Obtener todos los gastos con información de la categoría (filtrados por curso)
 router.get('/', (req, res) => {
+  const { course_id } = req.query;
+  
+  if (!course_id) {
+    return res.status(400).json({ error: 'course_id es requerido' });
+  }
+  
   db.query(
     `SELECT 
       e.id, 
@@ -37,7 +48,9 @@ router.get('/', (req, res) => {
       c.name AS category 
     FROM expenses e 
     LEFT JOIN expense_categories c ON e.category_id = c.id
+    WHERE e.course_id = ?
     ORDER BY e.date DESC`,
+    [course_id],
     (err, results) => {
       if (err) return res.status(500).json({ error: err.message });
 
@@ -52,15 +65,23 @@ router.get('/', (req, res) => {
   );
 });
 
-// 📌 Obtener gastos agrupados por categoría
+// 📌 Obtener gastos agrupados por categoría (filtrados por curso)
 router.get('/grouped', (req, res) => {
+  const { course_id } = req.query;
+  
+  if (!course_id) {
+    return res.status(400).json({ error: 'course_id es requerido' });
+  }
+  
   db.query(
     `SELECT 
       c.name AS category, 
       SUM(e.amount) AS total 
     FROM expenses e 
     LEFT JOIN expense_categories c ON e.category_id = c.id
+    WHERE e.course_id = ?
     GROUP BY c.name`,
+    [course_id],
     (err, results) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json(results);
@@ -71,13 +92,17 @@ router.get('/grouped', (req, res) => {
 // 📌 Actualizar un gasto (incluyendo imágenes)
 router.put('/:id', (req, res) => {
   const { id } = req.params;
-  const { category_id, amount, date, description, observacion, image_url } = req.body;
+  const { category_id, amount, date, description, observacion, image_url, course_id } = req.body;
+
+  if (!course_id) {
+    return res.status(400).json({ error: 'course_id es requerido' });
+  }
 
   db.query(
     `UPDATE expenses 
-     SET category_id = ?, amount = ?, date = ?, description = ?, observacion = ?, image_url = ?
+     SET category_id = ?, amount = ?, date = ?, description = ?, observacion = ?, image_url = ?, course_id = ?
      WHERE id = ?`,
-    [category_id, amount, date, description, observacion, JSON.stringify(image_url), id],
+    [category_id, amount, date, description, observacion, JSON.stringify(image_url), course_id, id],
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message });
       if (result.affectedRows === 0) {
@@ -105,10 +130,17 @@ router.delete('/:id', (req, res) => {
   );
 });
 
-// 📌 Obtener la vista de gastos divididos por estudiantes
+// 📌 Obtener la vista de gastos divididos por estudiantes (filtrados por curso)
 router.get('/expenses-per-student', (req, res) => {
+  const { course_id } = req.query;
+  
+  if (!course_id) {
+    return res.status(400).json({ error: 'course_id es requerido' });
+  }
+  
   db.query(
-    `SELECT * FROM student_expenses_share ORDER BY student_name ASC`,
+    `SELECT * FROM student_expenses_share WHERE course_id = ? ORDER BY student_name ASC`,
+    [course_id],
     (err, results) => {
       if (err) {
         console.error("Error al obtener los gastos por estudiante:", err);

@@ -80,6 +80,7 @@ app.use('/api/payments', require('./routes/payments'));
 app.use('/api/config', require('./routes/config'));
 app.use('/api/expenses', require('./routes/expenses'));
 app.use('/api/adjustments', require('./routes/adjustments'));
+app.use('/api/courses', require('./routes/courses'));
 
 // Puerto del servidor
 const PORT = process.env.PORT || 3004;

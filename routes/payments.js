@@ -27,12 +27,18 @@ router.post("/", (req, res) => {
     payment_period,
     payment_image,
     payment_status,
+    course_id,
   } = req.body;
+  
+  if (!course_id) {
+    return res.status(400).json({ error: 'course_id es requerido' });
+  }
+  
   const uuid = uuidv4(); // Genera un UUID en formato STRING
   const uuidBuffer = uuidToBuffer(uuid); // Convierte UUID a BINARY(16)
 
   db.query(
-    "INSERT INTO payments (id, student_id, amount, date, payment_period, payment_image, payment_status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO payments (id, student_id, amount, date, payment_period, payment_image, payment_status, course_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     [
       uuidBuffer,
       student_id,
@@ -41,6 +47,7 @@ router.post("/", (req, res) => {
       payment_period,
       payment_image,
       payment_status,
+      course_id,
     ],
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -52,15 +59,23 @@ router.post("/", (req, res) => {
         payment_period,
         payment_image,
         payment_status,
+        course_id,
       });
     }
   );
 });
 
-// Obtener pagos de todos los estudiantes
+// Obtener pagos de todos los estudiantes (filtrados por curso)
 router.get("/", (req, res) => {
+  const { course_id } = req.query;
+  
+  if (!course_id) {
+    return res.status(400).json({ error: 'course_id es requerido' });
+  }
+  
   db.query(
-    "SELECT id, student_id, amount, date, payment_period, payment_image, payment_status FROM payments order by date desc",
+    "SELECT id, student_id, amount, date, payment_period, payment_image, payment_status FROM payments WHERE course_id = ? ORDER BY date DESC",
+    [course_id],
     (err, results) => {
       if (err) return res.status(500).json({ error: err.message });
 
@@ -85,11 +100,17 @@ router.put("/:uuid", async (req, res) => {
       payment_period,
       payment_image,
       payment_status,
+      course_id,
     } = req.body;
+    
+    if (!course_id) {
+      return res.status(400).json({ error: 'course_id es requerido' });
+    }
+    
     const uuidBuffer = uuidToBuffer(uuid);
 
     db.query(
-      "UPDATE payments SET student_id = ?, amount = ?, date = ?, payment_period = ?, payment_image = ?, payment_status = ? WHERE id = ?",
+      "UPDATE payments SET student_id = ?, amount = ?, date = ?, payment_period = ?, payment_image = ?, payment_status = ?, course_id = ? WHERE id = ?",
       [
         student_id,
         amount,
@@ -97,6 +118,7 @@ router.put("/:uuid", async (req, res) => {
         payment_period,
         payment_image,
         payment_status,
+        course_id,
         uuidBuffer,
       ],
       (err, result) => {
@@ -140,6 +162,12 @@ router.delete("/:uuid", async (req, res) => {
 });
 router.get("/grouped", async (req, res) => {
   try {
+    const { course_id } = req.query;
+    
+    if (!course_id) {
+      return res.status(400).json({ error: 'course_id es requerido' });
+    }
+    
     const query = `
       SELECT 
         s.id AS studentID, 
@@ -150,11 +178,13 @@ router.get("/grouped", async (req, res) => {
         p.payment_period,
         p.payment_status
       FROM students s
+      INNER JOIN student_courses sc ON s.id = sc.student_id
       JOIN payments p ON s.id = p.student_id
+      WHERE sc.course_id = ? AND sc.is_active = 1 AND p.course_id = ?
       ORDER BY s.id;
     `;
 
-    db.query(query, (err, results) => {
+    db.query(query, [course_id, course_id], (err, results) => {
       if (err) {
         console.error("Error al obtener los pagos agrupados:", err);
         return res.status(500).json({ message: "Error al obtener los pagos", error: err });
