@@ -1,4 +1,4 @@
-# 💼 Financial Dashboard Backend
+# 💼 Financial Dashboard Backend 
 
 API REST para el sistema de gestión financiera de estudiantes y cursos.
 
