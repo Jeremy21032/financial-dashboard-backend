@@ -16,35 +16,43 @@ function bufferToUuid(buffer) {
   return uuidStringify(buffer);
 }
 
-// Obtener el total esperado desde la tabla config
+// Obtener el total esperado desde la tabla config por curso
 router.get("/", (req, res) => {
-  db.query("SELECT total_goal FROM config LIMIT 1", (err, results) => {
+  const { course_id } = req.query;
+  
+  if (!course_id) {
+    return res.status(400).json({ error: 'course_id es requerido' });
+  }
+  
+  db.query("SELECT total_goal FROM config WHERE course_id = ?", [course_id], (err, results) => {
     if (err) return res.status(500).json({ error: err.message });
 
     if (results.length > 0) {
       res.json({ total_goal: results[0].total_goal });
     } else {
-      res.status(404).json({ message: "Configuración no encontrada" });
+      res.status(404).json({ message: "Configuración no encontrada para este curso" });
     }
   });
 });
 
 router.put("/", (req, res) => {
-  const { total_goal } = req.body;
+  const { total_goal, course_id } = req.body;
+  
+  if (!course_id) {
+    return res.status(400).json({ error: 'course_id es requerido' });
+  }
 
+  // Usar INSERT ... ON DUPLICATE KEY UPDATE para crear o actualizar
   db.query(
-    "UPDATE config SET total_goal = ? WHERE id = 1",
-    [total_goal],
+    "INSERT INTO config (course_id, total_goal) VALUES (?, ?) ON DUPLICATE KEY UPDATE total_goal = ?",
+    [course_id, total_goal, total_goal],
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message });
-
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ message: "Configuración no encontrada" });
-      }
 
       res.json({
         message: "Monto total actualizado correctamente",
         total_goal,
+        course_id
       });
     }
   );
