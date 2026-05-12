@@ -141,7 +141,8 @@ router.get('/expenses-per-student', (req, res) => {
   db.query(
     `SELECT 
       v.*,
-      COALESCE(c.base_amount, 0) AS category_base_amount
+      COALESCE(c.base_amount, 0) AS category_base_amount,
+      c.id AS category_id
     FROM student_expenses_share v
     LEFT JOIN expense_categories c
       ON c.course_id = v.course_id AND c.name = v.category
