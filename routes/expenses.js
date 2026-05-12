@@ -139,7 +139,14 @@ router.get('/expenses-per-student', (req, res) => {
   }
   
   db.query(
-    `SELECT * FROM student_expenses_share WHERE course_id = ? ORDER BY student_name ASC`,
+    `SELECT 
+      v.*,
+      COALESCE(c.base_amount, 0) AS category_base_amount
+    FROM student_expenses_share v
+    LEFT JOIN expense_categories c
+      ON c.course_id = v.course_id AND c.name = v.category
+    WHERE v.course_id = ?
+    ORDER BY v.student_name ASC`,
     [course_id],
     (err, results) => {
       if (err) {

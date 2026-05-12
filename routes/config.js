@@ -37,7 +37,7 @@ router.get("/", (req, res) => {
 
 router.put("/", (req, res) => {
   const { total_goal, course_id } = req.body;
-  
+
   if (!course_id) {
     return res.status(400).json({ error: 'course_id es requerido' });
   }

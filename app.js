@@ -20,46 +20,83 @@ app.use(bodyParser.urlencoded({ limit: '500mb', extended: true }));
 
 // 🔹 Función para conectar y mantener MySQL activo
 let db;
+let pingIntervalId = null;
+let reconnectTimer = null;
+
+const RETRYABLE_DB_ERRORS = new Set([
+  'PROTOCOL_CONNECTION_LOST',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'ECONNREFUSED',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+]);
+
+const scheduleReconnect = () => {
+  if (reconnectTimer) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connectToDatabase();
+  }, 5000);
+};
 
 const connectToDatabase = () => {
+  if (pingIntervalId) {
+    clearInterval(pingIntervalId);
+    pingIntervalId = null;
+  }
+  if (db) {
+    try {
+      db.removeAllListeners();
+      db.destroy();
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
   db = mysql.createConnection({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
-    multipleStatements: true // Para ejecutar múltiples queries en una sola solicitud si es necesario
+    multipleStatements: true,
+    connectTimeout: 60000,
   });
 
   db.connect((err) => {
     if (err) {
       console.error('❌ Error conectando a MySQL:', err.message);
-      setTimeout(connectToDatabase, 5000); // Reintento de conexión tras 5 segundos
-    } else {
-      console.log('✅ Conectado a MySQL');
+      if (err.code === 'ETIMEDOUT' || err.code === 'ECONNREFUSED') {
+        console.error(
+          '   → Revisa DB_HOST / puerto, VPN, firewall y que MySQL permita conexiones desde tu IP (p. ej. panel AlwaysData: acceso remoto).'
+        );
+      }
+      scheduleReconnect();
+      return;
     }
+    console.log('✅ Conectado a MySQL');
+
+    pingIntervalId = setInterval(() => {
+      if (!db) return;
+      db.ping((pingErr) => {
+        if (pingErr) {
+          console.error('⚠️ Error en el ping de MySQL:', pingErr.message);
+        } else {
+          console.log('✅ Ping enviado a MySQL para mantener la conexión activa.');
+        }
+      });
+    }, 300000);
   });
 
-  // Manejo de errores y reconexión
   db.on('error', (err) => {
     console.error('🔥 Error en la conexión de MySQL:', err.message);
-    if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
-      console.log('🔄 Reintentando conexión...');
-      connectToDatabase();
-    } else {
-      throw err;
+    if (RETRYABLE_DB_ERRORS.has(err.code)) {
+      console.log('🔄 Reintentando conexión en 5s...');
+      scheduleReconnect();
+      return;
     }
+    throw err;
   });
-
-  // 🔹 Mantener la conexión activa enviando un "ping" cada 5 minutos
-  setInterval(() => {
-    db.ping((err) => {
-      if (err) {
-        console.error('⚠️ Error en el ping de MySQL:', err.message);
-      } else {
-        console.log('✅ Ping enviado a MySQL para mantener la conexión activa.');
-      }
-    });
-  }, 150000); // 5 minutos
 };
 
 // Inicializar conexión a la base de datos
