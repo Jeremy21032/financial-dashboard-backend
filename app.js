@@ -119,6 +119,7 @@ app.use('/api/expenses', require('./routes/expenses'));
 app.use('/api/adjustments', require('./routes/adjustments'));
 app.use('/api/courses', require('./routes/courses'));
 app.use('/api/surplus-allocations', require('./routes/surplusAllocations'));
+app.use('/api/graduation', require('./routes/graduation'));
 
 // Puerto del servidor
 const PORT = process.env.PORT || 3004;
