@@ -15,8 +15,28 @@ curl -X POST https://TU-BACKEND/api/graduation/auth/login \
 
 Ejecutar en orden en MySQL:
 
-1. `migrations/003_graduation_tables.sql`
-2. `migrations/004_graduation_summary_views.sql`
+1. `migrations/003_graduation_tables.sql` … `006` (histórico; si la BD ya existe, usar **007**)
+2. **`migrations/007_graduation_schema_idempotent.sql`** — recomendado si las tablas **ya están creadas**: `CREATE IF NOT EXISTS` + `ALTER` idempotentes + vistas
+3. `migrations/005_graduation_auth_seed_example.sql` (opcional, datos de ejemplo)
+
+### Si las tablas ya existen
+
+Ejecutar solo:
+
+```bash
+mysql -h TU_HOST -u TU_USER -p TU_BASE < migrations/007_graduation_schema_idempotent.sql
+```
+
+No borra datos. Añade columnas nuevas, renombra `receipt_image` → `transfer_receipt_image` en abonos, y quita `receipt_images` en gastos.
+
+## Dos tablas distintas (no mezclar)
+
+| Tabla | API | Uso |
+|-------|-----|-----|
+| `graduation_contributions` | `/contributions` | **Abonos** — dinero que deposita cada **curso** (`course_id`, `transfer_receipt_image`) |
+| `graduation_expenses` | `/expenses` | **Gastos** — pago a proveedor por **actividad** (`activity_id`, `payment_receipt_image`, `invoice_images`) |
+
+No hay FK entre contributions y expenses. El resumen une totales por vistas (`graduation_course_totals`, `graduation_activity_totals`).
 
 ## Variables de entorno
 

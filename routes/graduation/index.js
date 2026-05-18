@@ -3,6 +3,10 @@ const router = express.Router();
 const db = require('../../db');
 const authRouter = require('./auth');
 const { graduationAuth, blockReadonlyWrites } = require('../../middleware/graduationAuth');
+const {
+  resolveContributionReceiptColumn,
+  resolveExpenseColumns,
+} = require('./schema');
 
 router.use(graduationAuth);
 router.use(blockReadonlyWrites);
@@ -17,6 +21,31 @@ function parseJsonImages(value) {
   } catch {
     return [];
   }
+}
+
+function formatContributionRow(row) {
+  const image = row.transfer_receipt_image ?? row.receipt_image ?? null;
+  return {
+    ...row,
+    transfer_receipt_image: image,
+  };
+}
+
+function formatExpenseRow(row) {
+  const legacyImages = parseJsonImages(row.receipt_images);
+  const payment = row.payment_receipt_image ?? legacyImages[0] ?? null;
+  let invoices = parseJsonImages(row.invoice_images);
+  if (!invoices.length && legacyImages.length > 1) {
+    invoices = legacyImages.slice(1);
+  } else if (!invoices.length && legacyImages.length === 1 && !row.payment_receipt_image) {
+    invoices = [];
+  }
+
+  return {
+    ...row,
+    payment_receipt_image: payment,
+    invoice_images: invoices,
+  };
 }
 
 // ——— Campañas ———
@@ -339,60 +368,115 @@ router.get('/contributions', (req, res) => {
 
   db.query(sql, params, (err, results) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json(results);
+    res.json(results.map(formatContributionRow));
   });
 });
 
 router.post('/contributions', (req, res) => {
-  const { campaign_id, course_id, amount, date, receipt_image, notes, status } = req.body;
+  const {
+    campaign_id,
+    course_id,
+    amount,
+    date,
+    transfer_receipt_image,
+    receipt_number,
+    transfer_motivo,
+    reported_by,
+    notes,
+    status,
+  } = req.body;
   if (!campaign_id || !course_id || amount == null || !date) {
     return res.status(400).json({ error: 'campaign_id, course_id, amount y date son requeridos' });
   }
 
-  db.query(
-    `INSERT INTO graduation_contributions
-     (campaign_id, course_id, amount, date, receipt_image, notes, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [
-      campaign_id,
-      course_id,
-      amount,
-      date,
-      receipt_image || null,
-      notes || null,
-      status || 'Registrado',
-    ],
-    (err, result) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.status(201).json({
-        id: result.insertId,
+  const imageValue = transfer_receipt_image || null;
+
+  resolveContributionReceiptColumn((colErr, receiptCol) => {
+    if (colErr) return res.status(500).json({ error: colErr.message });
+
+    db.query(
+      `INSERT INTO graduation_contributions
+       (campaign_id, course_id, amount, date, receipt_number, transfer_motivo, reported_by,
+        ${receiptCol}, notes, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
         campaign_id,
         course_id,
         amount,
         date,
-        receipt_image: receipt_image || null,
-        notes: notes || null,
-        status: status || 'Registrado',
-      });
-    }
-  );
+        receipt_number || null,
+        transfer_motivo || null,
+        reported_by || null,
+        imageValue,
+        notes || null,
+        status || 'Registrado',
+      ],
+      (err, result) => {
+        if (err) return res.status(500).json({ error: err.message });
+        const row = {
+          id: result.insertId,
+          campaign_id,
+          course_id,
+          amount,
+          date,
+          receipt_number: receipt_number || null,
+          transfer_motivo: transfer_motivo || null,
+          reported_by: reported_by || null,
+          notes: notes || null,
+          status: status || 'Registrado',
+        };
+        row[receiptCol] = imageValue;
+        res.status(201).json(formatContributionRow(row));
+      }
+    );
+  });
 });
 
 router.put('/contributions/:id', (req, res) => {
   const { id } = req.params;
-  const { campaign_id, course_id, amount, date, receipt_image, notes, status } = req.body;
+  const {
+    campaign_id,
+    course_id,
+    amount,
+    date,
+    transfer_receipt_image,
+    receipt_number,
+    transfer_motivo,
+    reported_by,
+    notes,
+    status,
+  } = req.body;
 
-  db.query(
-    `UPDATE graduation_contributions
-     SET campaign_id = ?, course_id = ?, amount = ?, date = ?, receipt_image = ?, notes = ?, status = ?
-     WHERE id = ?`,
-    [campaign_id, course_id, amount, date, receipt_image || null, notes || null, status || 'Registrado', id],
-    (err, result) => {
-      if (err) return res.status(500).json({ error: err.message });
-      if (result.affectedRows === 0) return res.status(404).json({ message: 'Abono no encontrado' });
-      res.json({ message: 'Abono actualizado' });
-    }
-  );
+  const imageValue = transfer_receipt_image || null;
+
+  resolveContributionReceiptColumn((colErr, receiptCol) => {
+    if (colErr) return res.status(500).json({ error: colErr.message });
+
+    db.query(
+      `UPDATE graduation_contributions
+       SET campaign_id = ?, course_id = ?, amount = ?, date = ?, receipt_number = ?,
+           transfer_motivo = ?, reported_by = ?, ${receiptCol} = ?, notes = ?, status = ?
+       WHERE id = ?`,
+      [
+        campaign_id,
+        course_id,
+        amount,
+        date,
+        receipt_number || null,
+        transfer_motivo || null,
+        reported_by || null,
+        imageValue,
+        notes || null,
+        status || 'Registrado',
+        id,
+      ],
+      (err, result) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (result.affectedRows === 0) return res.status(404).json({ message: 'Abono no encontrado' });
+        res.json({ message: 'Abono actualizado' });
+      }
+    );
+  });
 });
 
 router.delete('/contributions/:id', (req, res) => {
@@ -425,58 +509,131 @@ router.get('/expenses', (req, res) => {
 
   db.query(sql, params, (err, results) => {
     if (err) return res.status(500).json({ error: err.message });
-    const formatted = results.map((row) => ({
-      ...row,
-      receipt_images: parseJsonImages(row.receipt_images),
-    }));
-    res.json(formatted);
+    res.json(results.map(formatExpenseRow));
   });
 });
 
 router.post('/expenses', (req, res) => {
-  const { campaign_id, activity_id, amount, date, description, receipt_images } = req.body;
+  const {
+    campaign_id,
+    activity_id,
+    amount,
+    date,
+    description,
+    payment_receipt_image,
+    invoice_images,
+  } = req.body;
   if (!campaign_id || !activity_id || amount == null || !date) {
     return res.status(400).json({ error: 'campaign_id, activity_id, amount y date son requeridos' });
   }
 
-  const imagesJson = JSON.stringify(receipt_images || []);
+  const paymentValue = payment_receipt_image || null;
+  const invoicesValue = invoice_images || [];
 
-  db.query(
-    `INSERT INTO graduation_expenses
-     (campaign_id, activity_id, amount, date, description, receipt_images)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [campaign_id, activity_id, amount, date, description || null, imagesJson],
-    (err, result) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.status(201).json({
-        id: result.insertId,
-        campaign_id,
-        activity_id,
-        amount,
-        date,
-        description: description || null,
-        receipt_images: receipt_images || [],
-      });
+  resolveExpenseColumns((colErr, cols) => {
+    if (colErr) return res.status(500).json({ error: colErr.message });
+
+    const insertCols = ['campaign_id', 'activity_id', 'amount', 'date', 'description'];
+    const insertVals = [
+      campaign_id,
+      activity_id,
+      amount,
+      date,
+      description || null,
+    ];
+
+    if (cols.payment) {
+      insertCols.push(cols.payment);
+      insertVals.push(paymentValue);
     }
-  );
+    if (cols.invoices) {
+      insertCols.push(cols.invoices);
+      insertVals.push(JSON.stringify(invoicesValue));
+    } else if (cols.legacy) {
+      const legacyArr = [];
+      if (paymentValue) legacyArr.push(paymentValue);
+      legacyArr.push(...invoicesValue);
+      insertCols.push(cols.legacy);
+      insertVals.push(JSON.stringify(legacyArr));
+    }
+
+    const placeholders = insertCols.map(() => '?').join(', ');
+    db.query(
+      `INSERT INTO graduation_expenses (${insertCols.join(', ')}) VALUES (${placeholders})`,
+      insertVals,
+      (err, result) => {
+        if (err) return res.status(500).json({ error: err.message });
+        const row = {
+          id: result.insertId,
+          campaign_id,
+          activity_id,
+          amount,
+          date,
+          description: description || null,
+          payment_receipt_image: paymentValue,
+          invoice_images: JSON.stringify(invoicesValue),
+        };
+        res.status(201).json(formatExpenseRow(row));
+      }
+    );
+  });
 });
 
 router.put('/expenses/:id', (req, res) => {
   const { id } = req.params;
-  const { campaign_id, activity_id, amount, date, description, receipt_images } = req.body;
-  const imagesJson = JSON.stringify(receipt_images || []);
+  const {
+    campaign_id,
+    activity_id,
+    amount,
+    date,
+    description,
+    payment_receipt_image,
+    invoice_images,
+  } = req.body;
 
-  db.query(
-    `UPDATE graduation_expenses
-     SET campaign_id = ?, activity_id = ?, amount = ?, date = ?, description = ?, receipt_images = ?
-     WHERE id = ?`,
-    [campaign_id, activity_id, amount, date, description || null, imagesJson, id],
-    (err, result) => {
-      if (err) return res.status(500).json({ error: err.message });
-      if (result.affectedRows === 0) return res.status(404).json({ message: 'Gasto no encontrado' });
-      res.json({ message: 'Gasto actualizado' });
+  const paymentValue = payment_receipt_image || null;
+  const invoicesValue = invoice_images || [];
+
+  resolveExpenseColumns((colErr, cols) => {
+    if (colErr) return res.status(500).json({ error: colErr.message });
+
+    const sets = [
+      'campaign_id = ?',
+      'activity_id = ?',
+      'amount = ?',
+      'date = ?',
+      'description = ?',
+    ];
+    const vals = [campaign_id, activity_id, amount, date, description || null];
+
+    if (cols.payment) {
+      sets.push(`${cols.payment} = ?`);
+      vals.push(paymentValue);
     }
-  );
+    if (cols.invoices) {
+      sets.push(`${cols.invoices} = ?`);
+      vals.push(JSON.stringify(invoicesValue));
+    }
+    if (cols.legacy && !cols.payment && !cols.invoices) {
+      const legacyArr = [];
+      if (paymentValue) legacyArr.push(paymentValue);
+      legacyArr.push(...invoicesValue);
+      sets.push(`${cols.legacy} = ?`);
+      vals.push(JSON.stringify(legacyArr));
+    }
+
+    vals.push(id);
+
+    db.query(
+      `UPDATE graduation_expenses SET ${sets.join(', ')} WHERE id = ?`,
+      vals,
+      (err, result) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (result.affectedRows === 0) return res.status(404).json({ message: 'Gasto no encontrado' });
+        res.json({ message: 'Gasto actualizado' });
+      }
+    );
+  });
 });
 
 router.delete('/expenses/:id', (req, res) => {
