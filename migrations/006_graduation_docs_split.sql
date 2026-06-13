@@ -1,0 +1,2 @@
+-- DEPRECADO: usar migrations/007_graduation_schema_idempotent.sql
+-- (CREATE IF NOT EXISTS + ALTER idempotentes para BD ya existente)

@@ -17,7 +17,8 @@ Ejecutar en orden en MySQL:
 
 1. `migrations/003_graduation_tables.sql` … `006` (histórico; si la BD ya existe, usar **007**)
 2. **`migrations/007_graduation_schema_idempotent.sql`** — recomendado si las tablas **ya están creadas**: `CREATE IF NOT EXISTS` + `ALTER` idempotentes + vistas
-3. `migrations/005_graduation_auth_seed_example.sql` (opcional, datos de ejemplo)
+3. **`migrations/008_graduation_contracts.sql`** — contratos con proveedor + columna `contract_id` en gastos
+4. `migrations/005_graduation_auth_seed_example.sql` (opcional, datos de ejemplo)
 
 ### Si las tablas ya existen
 
@@ -34,7 +35,8 @@ No borra datos. Añade columnas nuevas, renombra `receipt_image` → `transfer_r
 | Tabla | API | Uso |
 |-------|-----|-----|
 | `graduation_contributions` | `/contributions` | **Abonos** — dinero que deposita cada **curso** (`course_id`, `transfer_receipt_image`) |
-| `graduation_expenses` | `/expenses` | **Gastos** — pago a proveedor por **actividad** (`activity_id`, `payment_receipt_image`, `invoice_images`) |
+| `graduation_contracts` + `graduation_contract_items` | `/contracts` | **Contratos** con proveedor (ítems, cantidades, abono, saldo, entrega) |
+| `graduation_expenses` | `/expenses` | **Gastos** — vinculados a un **contrato** (`contract_id`) y opcionalmente a una actividad |
 
 No hay FK entre contributions y expenses. El resumen une totales por vistas (`graduation_course_totals`, `graduation_activity_totals`).
 

@@ -12,6 +12,7 @@ router.use(graduationAuth);
 router.use(blockReadonlyWrites);
 
 router.use('/auth', authRouter);
+router.use('/contracts', require('./contracts'));
 
 function parseJsonImages(value) {
   if (!value) return [];
@@ -491,19 +492,24 @@ router.delete('/contributions/:id', (req, res) => {
 // ——— Gastos ———
 
 router.get('/expenses', (req, res) => {
-  const { campaign_id, activity_id } = req.query;
+  const { campaign_id, activity_id, contract_id } = req.query;
   if (!campaign_id) return res.status(400).json({ error: 'campaign_id es requerido' });
 
   let sql = `
-    SELECT ge.*, ga.name AS activity_name
+    SELECT ge.*, ga.name AS activity_name, gc.title AS contract_title, gc.category AS contract_category
     FROM graduation_expenses ge
-    JOIN graduation_activities ga ON ga.id = ge.activity_id
+    LEFT JOIN graduation_activities ga ON ga.id = ge.activity_id
+    LEFT JOIN graduation_contracts gc ON gc.id = ge.contract_id
     WHERE ge.campaign_id = ?
   `;
   const params = [campaign_id];
   if (activity_id) {
     sql += ' AND ge.activity_id = ?';
     params.push(activity_id);
+  }
+  if (contract_id) {
+    sql += ' AND ge.contract_id = ?';
+    params.push(contract_id);
   }
   sql += ' ORDER BY ge.date DESC, ge.id DESC';
 
@@ -517,14 +523,18 @@ router.post('/expenses', (req, res) => {
   const {
     campaign_id,
     activity_id,
+    contract_id,
     amount,
     date,
     description,
     payment_receipt_image,
     invoice_images,
   } = req.body;
-  if (!campaign_id || !activity_id || amount == null || !date) {
-    return res.status(400).json({ error: 'campaign_id, activity_id, amount y date son requeridos' });
+  if (!campaign_id || amount == null || !date) {
+    return res.status(400).json({ error: 'campaign_id, amount y date son requeridos' });
+  }
+  if (!activity_id && !contract_id) {
+    return res.status(400).json({ error: 'Indique contract_id o activity_id' });
   }
 
   const paymentValue = payment_receipt_image || null;
@@ -533,10 +543,11 @@ router.post('/expenses', (req, res) => {
   resolveExpenseColumns((colErr, cols) => {
     if (colErr) return res.status(500).json({ error: colErr.message });
 
-    const insertCols = ['campaign_id', 'activity_id', 'amount', 'date', 'description'];
+    const insertCols = ['campaign_id', 'contract_id', 'activity_id', 'amount', 'date', 'description'];
     const insertVals = [
       campaign_id,
-      activity_id,
+      contract_id || null,
+      activity_id || null,
       amount,
       date,
       description || null,
@@ -566,7 +577,8 @@ router.post('/expenses', (req, res) => {
         const row = {
           id: result.insertId,
           campaign_id,
-          activity_id,
+          contract_id: contract_id || null,
+          activity_id: activity_id || null,
           amount,
           date,
           description: description || null,
@@ -584,12 +596,17 @@ router.put('/expenses/:id', (req, res) => {
   const {
     campaign_id,
     activity_id,
+    contract_id,
     amount,
     date,
     description,
     payment_receipt_image,
     invoice_images,
   } = req.body;
+
+  if (!activity_id && !contract_id) {
+    return res.status(400).json({ error: 'Indique contract_id o activity_id' });
+  }
 
   const paymentValue = payment_receipt_image || null;
   const invoicesValue = invoice_images || [];
@@ -599,12 +616,20 @@ router.put('/expenses/:id', (req, res) => {
 
     const sets = [
       'campaign_id = ?',
+      'contract_id = ?',
       'activity_id = ?',
       'amount = ?',
       'date = ?',
       'description = ?',
     ];
-    const vals = [campaign_id, activity_id, amount, date, description || null];
+    const vals = [
+      campaign_id,
+      contract_id || null,
+      activity_id || null,
+      amount,
+      date,
+      description || null,
+    ];
 
     if (cols.payment) {
       sets.push(`${cols.payment} = ?`);
